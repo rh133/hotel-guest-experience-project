@@ -6,12 +6,6 @@ This project explores the guest experience using a simulated dataset that mirror
 - R, R Markdown
 - tidyverse, ggplot2, dplyr, janitor, DT
 
-## Key insights
-- Cleanliness issues are heavily concentrated in one property.
-- Check-in/out complaints mainly come from business travelers.
-- Room/bedding comfort issues are tied to specific room types.
-- Platinum loyalty members report the most service dissatisfaction.
-
 ## Files included
 - `hotel_guest_experience_analysis.rmd` → R Markdown file with full analysis
 - `Hotel Chain Satisfaction Survey Analysis.html` → Rendered HTML report
