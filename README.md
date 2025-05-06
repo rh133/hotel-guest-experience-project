@@ -1,2 +1,21 @@
-# hotel-guest-experience-project
-Deep dive into hotel guest satisfaction and experience, from raw data to actionable insights, all done in R as a Part of my personal data analytics portfolio 
+# Hotel Guest Satisfaction Analysis
+
+This project explores the guest experience using a simulated dataset that mirrors a real-world scenario where a hotel chain experienced a drop in customer satisfaction observed through post-stay guest surveys and investigates guest satisfaction for improvement. Using R and R Markdown, I conducted data cleaning, data preperation, exploratory data analysis (EDA), and created visualizations to uncover key drivers of guest dissatisfaction and recommend improvements to enhance service quality and the overall customer experience.
+
+## Tools used
+- R, R Markdown
+- tidyverse, ggplot2, dplyr, janitor, DT
+
+## Key insights
+- Cleanliness issues are heavily concentrated in one property.
+- Check-in/out complaints mainly come from business travelers.
+- Room/bedding comfort issues are tied to specific room types.
+- Platinum loyalty members report the most service dissatisfaction.
+
+## Files included
+- `hotel_guest_experience_analysis.rmd` → R Markdown file with full analysis
+- `Hotel Chain Satisfaction Survey Analysis.html` → Rendered HTML report
+- `guest_satisfaction_survey_responses.xlsx` → Raw dataset
+
+## How to view
+- Open the HTML report in your browser to explore the results.
