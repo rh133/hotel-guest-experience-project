@@ -1,0 +1,884 @@
+---
+title: "Hotel Chain Satisfaction Survey Analysis"
+
+
+
+
+author: "Rahma"
+date: "2025-04-16"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: false
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: false
+---
+# Hotel Guest Satisfaction Analysis
+
+
+## 1. Introduction
+
+A leading hotel chain is facing a silent crisis as they notice a huge drop in guest satisfaction rate, the mission of this analysis is to dive deep into the numbers, uncover hidden patterns, and reveal the truth behind the dissatisfaction. What stories do the guests' ratings tell? And how can the data lead the way to transformation through data-driven insights and actionable recommendations to enhance the overall guest experience?
+
+Due to confidentiality considerations and data protection standards, the data used in this project has been carefully simulated to reflect realistic patterns and guest behavior. 
+
+
+## 2. Loading Data and Packages 
+
+### Install and load necessary packages
+
+```{r setup, include=FALSE}
+install.packages("tidyverse")
+install.packages("readxl")
+install.packages("janitor")
+install.packages("dplyr")
+install.packages("DT")
+library("DT")
+library("tidyverse")
+library("readxl")
+library("stringr")
+library("janitor")
+library("dplyr")
+```
+
+
+### Load all sheets from the Excel file
+
+```{r load data}
+survey_responses <- read_excel("hotel_chain_satisfaction_survey_responses.xlsx", sheet = "survey_responses")
+
+room_details <- read_excel("hotel_chain_satisfaction_survey_responses.xlsx", sheet = "room_details")
+
+membership_info <- read_excel("hotel_chain_satisfaction_survey_responses.xlsx", sheet = "memberships_information")
+
+property_info <- read_excel("hotel_chain_satisfaction_survey_responses.xlsx", sheet = "properties_info")
+```
+
+
+## 3. Data Cleaning
+
+To ensure accuracy and consistency throughout this analysis the data we work with must be clean and well maintained.  
+This includes checking for missing values, fixing incorrect data types, and removing duplicates if needed.
+
+
+### Survey responses table
+
+```{r data_cleaning_survey, message=FALSE, warning=FALSE}
+# Take a look at the main data
+survey_responses <- as.data.frame(survey_responses)
+glimpse(survey_responses)
+
+
+# Check the structure of the data (to see data types)
+str(survey_responses)
+
+# Fix data structure 
+survey_responses <- survey_responses %>%
+  mutate(reservation_date = as.Date(reservation_date, origin = "1899-12-30"))
+
+# Check for missing values in each column
+colSums(is.na(survey_responses))
+
+# Remove rows where visit_purpose is missing since only 3 are missing
+survey_responses <- survey_responses %>% 
+  filter(!is.na(visit_purpose))
+
+# Check how many duplicate rows exist
+sum(duplicated(survey_responses))
+
+# Remove the duplicate rows
+survey_responses <- survey_responses[!duplicated(survey_responses), ]
+
+# Re-check the structure, duplicates, and missing values after cleaning
+str(survey_responses)
+colSums(is.na(survey_responses))
+sum(duplicated(survey_responses))
+
+# Replace NA's with clear values
+survey_responses <- survey_responses %>%
+  mutate(
+    membership_id = ifelse(is.na(membership_id), "No membership", membership_id)
+  )
+
+# Rename the satisfaction column
+survey_responses <- survey_responses %>%
+  rename(satisfied_or_dissatisfied = csat_dsat)
+
+# Replace "CSAT" and "DSAT" with full, clearer words
+survey_responses <- survey_responses %>%
+  mutate(
+    satisfied_or_dissatisfied = case_when(
+      satisfied_or_dissatisfied == "CSAT" ~ "Satisfied",
+      satisfied_or_dissatisfied == "DSAT" ~ "Dissatisfied",
+    )
+  )
+
+# Replace NA with "Not applicable" in the two reason columns
+survey_responses <- survey_responses %>%
+  mutate(
+    main_reason_satisfaction = ifelse(str_trim(main_reason_satisfaction) == "NA", "Not applicable", main_reason_satisfaction),
+    main_reason_dissatisfaction = ifelse(str_trim(main_reason_dissatisfaction) == "NA", "Not applicable", main_reason_dissatisfaction)
+  )
+
+# Rename the satisfaction column
+survey_responses <- survey_responses %>%
+  rename(room_code = room_type_code)
+
+# Final Look 
+head(survey_responses)
+```
+
+
+### Membership information table 
+
+```{r data_cleaning_membership, message=FALSE, warning=FALSE}
+# Take a look at the main data
+membership_info <- as.data.frame(membership_info)
+head(membership_info)
+glimpse(membership_info)
+
+# Check the structure of the data (to see data types)
+str(membership_info)
+
+# Check for missing values in each column
+colSums(is.na(membership_info))
+
+# Check how many duplicate rows exist
+sum(duplicated(membership_info))
+
+```
+
+
+### Property information table 
+
+```{r data_cleaning_property, message=FALSE, warning=FALSE}
+# Take a look at the data
+property_info <- as.data.frame(property_info)
+glimpse(property_info)
+
+# Check the structure of the data (to see data types)
+str(property_info)
+
+# Check for missing values in each column
+colSums(is.na(property_info))
+
+# Check how many duplicate rows exist
+sum(duplicated(property_info))
+```
+
+
+### Room details table 
+
+```{r data_cleaning_room, message=FALSE, warning=FALSE}
+# Take a look at the data
+room_details <- as.data.frame(room_details)
+glimpse(room_details)
+
+# Check the structure of the data (to see data types)
+str(room_details)
+
+# Check for missing values in each column
+colSums(is.na(room_details))
+
+# Check how if any duplicate rows exist
+sum(duplicated(room_details))
+
+# Replace NA's with proper values 
+room_details <- room_details %>%
+  mutate(
+    Kettle = ifelse(str_trim(Kettle) == "NA", "No", Kettle),
+    Hairdryer = ifelse(str_trim(Hairdryer) == "NA", "No", Hairdryer)
+  )
+    
+# Final Look 
+head(room_details)
+```
+
+
+### Final touch 
+
+Unifying names format for all tables to match the survey responses table.
+
+```{r data_cleaning_finaltouch, message=FALSE, warning=FALSE}
+# Clean column names to all lowercase with underscores
+room_details <- room_details %>%
+  clean_names()
+
+membership_info <- membership_info %>%
+  clean_names()
+
+property_info <- property_info %>%
+  clean_names()
+```
+
+
+## 4. Data Preperation
+
+In this section, we enrich the survey responses data by joining guest membership details, property information, and room features.
+
+```{r data-enrichment, message=FALSE, warning=FALSE}
+# Enrich the survey_responses by joining the supporting tables
+surveys_final <- survey_responses %>%
+  left_join(membership_info, by = "membership_id") %>%
+  left_join(property_info, by = "property_code") %>%
+  left_join(room_details, by = "room_code")
+
+# Rearranging the columns to a logical order
+surveys_final <- surveys_final %>%
+  select(
+    reservation_number,
+    reservation_date,
+    property_code,
+    hotel_name,
+    room_code,
+    room_type,
+    mattress_type,
+    pillow_type,
+    duvet_type,
+    bedsheets_type,
+    room_size_sqm,
+    membership_id,
+    membership_tier,
+    guest_age,
+    visit_purpose,
+    satisfied_or_dissatisfied,
+    main_reason_satisfaction,
+    main_reason_dissatisfaction,
+    food_quality_rating,
+    checkin_rating,
+    checkout_rating,
+    staff_friendliness,
+    room_cleanliness,
+    avg_ratings,
+    everything()
+  )
+
+# Rename NA's
+surveys_final<- surveys_final %>%
+  mutate(
+    membership_id = ifelse(membership_id == "NA", "No membership", membership_id)) 
+
+
+surveys_final<- surveys_final %>%
+  mutate(
+    membership_tier = ifelse(is.na(membership_tier),"No membership", membership_tier)) 
+
+surveys_final<- surveys_final %>%
+  mutate(
+    guest_age = ifelse(is.na(guest_age),"Not Available", guest_age)) 
+
+glimpse(surveys_final)
+```
+
+
+## 5. Exploratory Data Analysis
+
+
+### 5.1 Overall Satisfaction and Dissatisfaction Breakdown
+
+```{r eda_overall, message=FALSE, warning=FALSE}
+# Explore Satisfaction vs. Dissatisfaction Rates 
+satisfaction_summary <- surveys_final %>%
+  count(satisfied_or_dissatisfied) %>%
+  mutate(percentage = round(100 * n / sum(n), 1))
+
+
+# Plot
+library(ggplot2)
+
+ggplot(satisfaction_summary, aes(x = satisfied_or_dissatisfied, y = percentage, fill = satisfied_or_dissatisfied)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  labs(title = "Guest Satisfaction Overview", x = "", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+ggsave("satisfaction_overview_plot.png", width = 8, height = 5)
+```
+
+Already we notice that the ratio between satisfied and dissatisfied guests is huge, and the heart of this project is to figure out why, and how we can improve that so we can insure higher guest satisfaction rates and improve the guest experience, so for the following section will focus more and pay more attention on dissatisfied guests' surveys 
+
+
+### 5.2 Survey Responses by Property + Satisfaction Type
+
+We begin by exploring how guest satisfaction is distributed across the chain’s different properties. This will help reveal whether certain locations are more prone to guest dissatisfaction and allow us to prioritize improvement efforts accordingly.
+
+```{r eda_property, message=FALSE, warning=FALSE} 
+surveys_final %>%
+  count(hotel_name, satisfied_or_dissatisfied) %>%
+  ggplot(aes(x = reorder(hotel_name, n), y = n, fill = satisfied_or_dissatisfied)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  labs(title = "Satisfaction Distribution by Hotel", x = "Hotel", y = "Number of Responses", fill = "") +
+  theme_minimal()
+
+ggsave("Satisfaction Distribution by Hotel.png", width = 8, height = 5)
+```
+
+New Jersey and Los Angeles properties fall within an expected satisfaction range, meanwile the majority of dissatisfied responses are concentrated in the remaining three locations, with Florida leading by a significant margin.
+
+
+### 5.3 Guest Type Distribution (Business vs Leisure) by Satisfaction
+
+We then explore how satisfaction varies between business and leisure travelers. This lets us understand if different guest types are having different experiences, which can help tailor our recommendations.
+
+```{r eda_guesttype, message=FALSE, warning=FALSE}
+surveys_final %>%
+  count(visit_purpose, satisfied_or_dissatisfied) %>%
+  ggplot(aes(x = visit_purpose, y = n, fill = satisfied_or_dissatisfied)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  labs(title = "Guest Type Distribution by Satisfaction", x = "Purpose of Visit", y = "Count", fill = "") +
+  theme_minimal()
+
+ggsave("Guest Type Distribution by Satisfaction.png", width = 8, height = 5)
+```
+
+
+### 5.4 Membership Status Distribution by Satisfaction
+
+Next, we look at how satisfaction breaks down across membership tiers. This helps us see if loyalty program members are having better or worse experiences compared to non-members.
+
+```{r EDA_membership_status, message=FALSE, warning=FALSE}
+surveys_final %>%
+  mutate(
+    membership_tier = factor(
+      membership_tier,
+      levels = c("Bronze", "Silver", "Gold", "Platinum", "No membership")
+    )
+  ) %>%
+  count(membership_tier, satisfied_or_dissatisfied) %>%
+  group_by(satisfied_or_dissatisfied) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = membership_tier, y = n, fill = satisfied_or_dissatisfied)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.6), width = 0.6) +
+  geom_text(
+    aes(label = paste0(percentage, "%")),
+    position = position_dodge(width = 0.6),
+    vjust = -0.5, size = 3
+  ) +
+  labs(title = "Membership Tier by Satisfaction", x = "Membership Tier", y = "Count", fill = "") +
+  theme_minimal()
+
+
+ggsave("Membership Status by Satisfaction.png", width = 8, height = 5)
+```
+
+
+### 5.5 Satisfaction Trends Over Time
+
+Here, we explore how satisfaction has shifted over time. This helps us understand whether things have been improving, getting worse, or staying the same.
+
+```{r EDA_time_trends, message=FALSE, warning=FALSE}
+library(lubridate)
+
+surveys_final %>%
+  mutate(month = floor_date(reservation_date, "month")) %>%
+  count(month, satisfied_or_dissatisfied) %>%
+  ggplot(aes(x = month, y = n, color = satisfied_or_dissatisfied)) +
+  geom_line(size = 1.2) +
+  labs(title = "Satisfaction Trend Over Time", x = "Month", y = "Responses", color = "") +
+  theme_minimal()
+```
+
+
+### 5.6 Average Ratings by Category and Satisfaction
+
+We then dive into the average ratings across different service areas. This gives us a more detailed view of which parts of the guest experience are working well and which need attention.
+
+```{r EDA_ratings, message=FALSE, warning=FALSE}
+surveys_final %>%
+  group_by(satisfied_or_dissatisfied) %>%
+  summarise(
+    avg_food = mean(food_quality_rating, na.rm = TRUE),
+    avg_checkin = mean(checkin_rating, na.rm = TRUE),
+    avg_checkout = mean(checkout_rating, na.rm = TRUE),
+    avg_staff = mean(staff_friendliness, na.rm = TRUE),
+    avg_cleanliness = mean(room_cleanliness, na.rm = TRUE),
+    avg_overall = mean(avg_ratings, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -satisfied_or_dissatisfied, names_to = "category", values_to = "avg_rating") %>%
+  ggplot(aes(x = category, y = avg_rating, fill = satisfied_or_dissatisfied)) +
+  geom_col(position = "dodge") +
+  labs(title = "Average Ratings by Category", x = "Rating Category", y = "Average", fill = "") +
+  theme_minimal()
+
+ggsave("Average Ratings by Category.png", width = 8, height = 5)
+```
+
+### 5.7 Main Reasons for Dissatisfaction
+
+```{r eda_dissatisfied_filter, message=FALSE, warning=FALSE}
+# Filter only dissatisfied guests
+dissatisfied_guests <- surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied")
+```
+
+```{r eda_dissatisfaction_count, message=FALSE, warning=FALSE}
+# Count reasons for dissatisfaction
+dissatisfaction_reasons <- dissatisfied_guests %>%
+  count(main_reason_dissatisfaction) %>%
+  arrange(desc(n)) %>%
+  mutate(percentage = round(100 * n / sum(n), 1))
+```
+
+```{r eda_dissatisfaction_plot, message=FALSE, warning=FALSE}
+# Plot the dissatisfaction reasons
+ggplot(dissatisfaction_reasons, aes(x = reorder(main_reason_dissatisfaction, -percentage), y = percentage, fill = main_reason_dissatisfaction)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            vjust = -0.5, size = 3) +
+  labs(title = "Main Reasons for Guest Dissatisfaction", 
+       x = "Reason", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")
+
+ggsave("Main Reasons for Guest Dissatisfaction.png", width = 8, height = 5)
+```
+
+It becomes clear that guest dissatisfaction is largely concentrated in the first three categories. To address this effectively, a deeper dive into each area is essential.
+
+## 6. Deeper Insights
+
+In this section, we take a closer look at the main drivers of dissatisfaction to uncover their root causes, gain a clearer understanding of the underlying issues, and provide meaningful insights that can help inform effective and targeted solutions.
+
+
+### 6.1 Room cleanliness Analysis 
+
+We analyzed all dissatisfaction responses where the main reason was “Room cleanliness” to identify which properties contribute most to this issue. The pie chart below shows the percentage of cleanliness complaints contributed by each property.
+
+```{r room_cleanliness, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Room cleanliness") %>%
+  count(hotel_name) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = "", y = percentage, fill = hotel_name)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y") +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            position = position_stack(vjust = 0.5), size = 2.5) +
+  labs(title = "Cleanliness Complaints by Property", x = "", y = "") +
+  theme_void() +
+  theme(legend.title = element_blank())
+
+ggsave("Cleanliness Complaints by Property.png", width = 8 , height = 5)
+```
+
+So we come to find out that the huge majorty of compliants that relate to cleanliness come from the same property which is the one in Miami, we want to look at all of the negative surveys that come from this specific property to understand more about the issue, and see if it would be the leading cause of disstisfaction as well. 
+
+
+```{r room_cleanliness_miami, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", hotel_name == "Serenity Miami Hotel") %>%
+  count(main_reason_dissatisfaction) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = reorder(main_reason_dissatisfaction, n), y = percentage, fill = main_reason_dissatisfaction)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            hjust = -0.2, size = 2) +
+  coord_flip() +
+  labs(title = "Dissatisfaction Reasons at Serenity Miami Hotel", 
+       x = "Dissatisfaction Reason", 
+       y = "Percentage of Complaints") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+#### Conclusion 
+
+So we come to find that almost 81% of the cleanliness concerns come from the Miami property, and as we dig further into it, we see that nearly 73% of all dissatisfied guests from that property reported cleanliness as the main reason for their dissatisfaction. From these findings, we can conclude that the root cause of this issue, by a huge percentage, stems from the cleaning protocol and the practices of the housekeeping department in this property. Thus, from here on, it’s safe to say that addressing this issue with property management and housekeeping department management can lead to significantly improving overall satisfaction and enhancing the guest experience by around ~33% or 17 percentage points.
+
+
+### 6.2 Check-in/out Dissatisfaction Analysis
+
+As we move forward in addressing the dissatisfaction issue and working towards improving the overall guest experience, we turn to the second most common reason for dissatisfaction: the check-in and checkout process, which accounts for 20.9% of all dissatisfied responses. We dig deeper to understand where these concerns are coming from and the circumstances surrounding them, so we can better determine how to resolve this issue effectively, and so we start with seeing where they come from. 
+
+```{r checkin_property, message=FALSE, warning=FALSE}
+#Step 1: Distribution per Property
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Long check-in process") %>%
+  count(hotel_name) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = reorder(hotel_name, n), y = percentage, fill = hotel_name)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), hjust = 1.15, size = 3) +
+  coord_flip() +
+  labs(title = "Long check-in Complaints by Property", x = "Hotel", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+We see a distinctive rise in this type of complaint at the New York property, which sparks a lot of questions and interest, as New York is known for attracting both business and leisure tourism. This makes it worth examining the distribution more closely to see if any noticeable patterns emerge. 
+
+
+```{r checkin_guest_type, message=FALSE, warning=FALSE}
+#Step 3: Guest Type (Business vs Leisure)
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Long check-in process") %>%
+  count(visit_purpose) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = visit_purpose, y = percentage, fill = visit_purpose)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), vjust = 1.15, size = 3) +
+  labs(title = "Long check-in Complaints by Guest Type", x = "Guest Type", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+We see an interesting rise in long check-in complaints from business guests compared to leisure travelers, but looking at this, you can’t help but wonder — is this simply a matter of higher expectations from first-time or one-time guests? Or could it also be linked to whether guests are loyalty program members or not? Are loyalty members receiving faster or more personalized check-in compared to non-members? we need to unserstand more about these two groups. 
+
+```{r checkin_members, message=FALSE, warning=FALSE}
+#Step 3: Members vs Non-members + Membership Tiers 
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Long check-in process") %>%
+  count(membership_tier) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = membership_tier, y = percentage, fill = membership_tier)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), vjust = 1.15, size = 3) +
+  labs(title = "Long check-in Complaints by Membership Tier", x = "Membership Tier", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+So now we see that the majority of guests who complain about the long check-in process are either Bronze, Gold, or Silver members, holding the top three spots by a long shot. But to establish a clearer understanding, we need to look at the relationship between membership tier and guest type.
+
+```{r checkin_members_vs_guest_type, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Long check-in process") %>%
+  count(membership_tier, visit_purpose) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = membership_tier, y = percentage, fill = visit_purpose)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            position = position_dodge(width = 0.6), 
+            vjust = -0.5, size = 3) +
+  labs(title = "Check-in/out Complaints by Membership Tier and Guest Type", 
+       x = "Membership Tier", y = "Percentage (%)", fill = "Guest Type") +
+  theme_minimal()
+```
+
+The large variation we see in percentages between Gold and Silver members who are business travelers and the rest of guests makes it clear that this combination dominates this category of dissatisfaction. Thus, we can safely say that the majority of dissatisfied guests citing the long check-in process as their main concern are business travelers, most of whom are loyalty program members, predominantly holding Gold, Silver, and then Bronze tiers.
+
+
+#### Conclusion 
+
+Our findings suggest that the majority of guests who face this issue tend to be business travelers, who also largely fall into the Gold, Silver, and, in third place, Bronze membership tiers. We can address this issue by introducing a digital check-in feature within the loyalty platform, complete with a digital key. This would not only provide a solution for the majority affected by the problem but also serve as an incentive for the minority of non-members to enroll in the loyalty program. Therefore, arranging a meeting with the technical department to explore this solution would likely be highly effective and fruitful.
+
+
+### 6.3 Room and Bedding Comfort Analysis
+
+Moving on to the third most common reason for dissatisfaction, which accounts for 18.3% of all cases, we turn our attention to room and bedding comfort. In this section, we’ll explore the patterns behind these complaints to better understand what’s driving this issue and how it can be addressed, and since this is a room related issu, we will begin by seeing if it is relevent to one property or if the story unfolds in a different way.
+
+```{r comfort_by_property, message=FALSE, warning=FALSE}
+#Step 1: Distribution per Property
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Room/bedding comfort") %>%
+  count(hotel_name) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = reorder(hotel_name, n), y = percentage, fill = hotel_name)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            hjust = 1.15, size = 3) +
+  coord_flip() +
+  labs(title = "Room/Bedding Comfort Complaints by Property", 
+       x = "Hotel", y = "Percentage of Complaints") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+We find that the majority of these complaints come from the Houston property, but a significant portion—about 30%, also comes from the New York and Miami properties. This raises the question of whether the issue may be more closely related to a specific room type, which we will explore next.
+
+```{r comfort_by_room, message=FALSE, warning=FALSE}
+#Step 2: Distribution per Room Type
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Room/bedding comfort") %>%
+  count(room_type) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = reorder(room_type, n), y = percentage, fill = room_type)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            hjust = 1, size = 3) +
+  coord_flip() +
+  labs(title = "Room/Bedding Comfort Complaints by Room Type", 
+       x = "Room Type", y = "Percentage of Complaints") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+As per the findings above, 85.4% of the comfort complaints come from just two room types: the Standard Queen and the Two-Bedroom Suites. This is an overwhelming majority, but before making any assumptions, further digging is needed. We need to explore whether there’s anything in common between these two room types, as well as examine the relationship between these rooms and the distribution of dissatisfied customers because of this specific reason across the properties to see if a similar pattern emerges.
+
+```{r comfort_room_and_property, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Room/bedding comfort") %>%
+  count(room_type, hotel_name) %>%
+  group_by(room_type) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = room_type, y = percentage, fill = hotel_name)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            position = position_dodge(width = 0.8), 
+            vjust = -0.5, size = 3) +
+  labs(title = "Room/Bedding Comfort Complaints: Room Type Distribution by Property", 
+       x = "Room Type", y = "Percentage (%)", fill = "Hotel") +
+  scale_x_discrete(expand = c(0.2, 0)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r comfort_room_details, message=FALSE, warning=FALSE}
+DT::datatable(room_details)
+```
+
+
+#### Conclusion 
+
+The majority of comfort complaints come from the Houston property, with Standard Queen and Two-Bedroom Suites making up 85.4% of these issues. Looking at room details, both room types use down or feather bedding, which may contribute to discomfort. This suggests the issue is driven by both property-specific factors and bedding choices. 
+To address these concerns, we recommend further investigation into the condition of mattresses and bedding in the affected properties, as well as considering alternative bedding options (such as hypoallergenic fills) in the most problematic room types. By targeting these areas, the hotel chain has an opportunity to significantly reduce comfort-related complaints and improve the overall guest experience.
+
+
+### 6.4 Service Analysis 
+
+To understand more about this issue, we need to answer two key questions: 
+(1) Where is the problem occurring?  
+(2) Who’s experiencing it? 
+This approach will give us better insight into what’s happening and help guide targeted solutions.
+
+```{r service_property, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Poor service") %>%
+  count(hotel_name) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = reorder(hotel_name, n), y = percentage, fill = hotel_name)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            hjust = 1.15, size = 3) +
+  coord_flip() +
+  labs(title = "Staff Friendliness Complaints by Property", 
+       x = "Hotel", y = "Percentage of Complaints") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+While Miami is leading in frequency, it’s important to keep in mind that this property also received the largest number of surveys; the occurrence of this issue appears fairly consistent and persistent across the other properties as well.
+
+```{r service_membership, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied", main_reason_dissatisfaction == "Poor service") %>%
+  count(membership_tier) %>%
+  mutate(percentage = round(100 * n / sum(n), 1),
+         membership_tier = factor(membership_tier, levels = c("No membership", "Bronze", "Silver", "Gold", "Platinum"))) %>%
+  ggplot(aes(x = membership_tier, y = percentage, fill = membership_tier)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            vjust = -0.5, size = 3) +
+  labs(title = "Staff Friendliness Complaints by Membership Tier", 
+       x = "Membership Tier", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+We find here that the majority of these complaints come from Platinum members. However, before drawing any conclusions, we first need to examine the distribution of membership tiers at the Miami property to understand whether this issue is specific to that property or to Platinum members overall.
+
+
+```{r service_final, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(hotel_name == "Serenity Miami Hotel",
+         satisfied_or_dissatisfied == "Dissatisfied",
+         main_reason_dissatisfaction == "Poor service") %>%
+  count(membership_tier) %>%
+  mutate(percentage = round(100 * n / sum(n), 1),
+         membership_tier = factor(membership_tier, levels = c("No membership", "Bronze", "Silver", "Gold", "Platinum"))) %>%
+  ggplot(aes(x = membership_tier, y = percentage, fill = membership_tier)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = paste0(percentage, "%")),
+            vjust = -0.5, size = 3) +
+  labs(title = "Membership Tier Breakdown of Staff Friendliness Complaints at Serenity Miami Hotel",
+       x = "Membership Tier", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+
+#### Conclusion 
+
+We can now conclude that this is indeed not a property-specific issue, but rather one that Platinum members report more frequently than others. This suggests that holders of the highest membership tier likely have higher service expectations. As a result, proposing the creation of a specialized team dedicated to Platinum members could be a feasible step toward delivering more personalized and elevated service.
+
+### 6.5 Aminities Analysis
+
+Next, we look at how complaints about limited amenities are distributed across different room types to understand which categories are driving the most dissatisfaction.
+
+```{r aminities_room, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied",
+         main_reason_dissatisfaction == "Limited amenities") %>%
+  count(room_type) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = reorder(room_type, n), y = percentage, fill = room_type)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = paste0(percentage, "%")),
+            hjust = 1, size = 3) +
+  coord_flip() +
+  labs(title = "Room Type Breakdown of Limited Amenities Complaints",
+       x = "Room Type", y = "Percentage (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+We now explore how limited amenities complaints are distributed across both room types and properties to identify which combinations are driving the highest dissatisfaction.
+
+```{r aminities_property, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied",
+         main_reason_dissatisfaction == "Limited amenities") %>%
+  count(room_type, hotel_name) %>%
+  group_by(room_type) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = room_type, y = percentage, fill = hotel_name)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            position = position_stack(vjust = 0.5), size = 3) +
+  labs(title = "Limited Amenities Complaints by Room Type and Property",
+       x = "Room Type", y = "Percentage (%)", fill = "Property") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+We notice that the Standard Queen room is leading in complaints, so a closer look at this room’s details is necessary to better understand the issue.
+
+```{r aminities_room_details, message=FALSE, warning=FALSE}
+DT::datatable(room_details)
+```
+
+
+#### Conclusion 
+
+Upon review, we see that this specific room type lacks a kettle and a hairdryer, so providing these amenities could be a positive step toward addressing guest concerns.
+
+
+### 6.6 Food Quality Analysis
+
+Next, we examine how complaints about disappointing food quality are distributed across the different hotel properties to identify where this issue is most prominent.
+
+```{r food_quality, message=FALSE, warning=FALSE}
+surveys_final %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied",
+         main_reason_dissatisfaction == "Food quality was disappointing") %>%
+  count(hotel_name) %>%
+  mutate(percentage = round(100 * n / sum(n), 1)) %>%
+  ggplot(aes(x = reorder(hotel_name, n), y = percentage, fill = hotel_name)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = paste0(percentage, "%")), 
+            hjust = 1.15, size = 3) +
+  coord_flip() +
+  labs(title = "Food Quality Complaints by Property", 
+       x = "Hotel", y = "Percentage of Complaints") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+
+#### Conclusion 
+
+We observe that the Houston and New York City properties are leading in food quality complaints, together accounting for over 60% of all cases. This suggests that focusing improvement efforts on these two locations could have the greatest impact on overall guest satisfaction regarding dining experiences.
+
+   
+## 7. Satisfaction Forecast
+
+Based on the analysis, we estimated the potential improvement in overall satisfaction if all identified dissatisfaction drivers were effectively addressed. Assuming a 70% resolution success rate, the satisfaction rate is projected to increase from the current level to a significantly higher level, reflecting a meaningful uplift in guest experience.
+
+```{r satisfaction_forecast, message=FALSE, warning=FALSE}
+# Step 1: Count current satisfied and dissatisfied
+satisfaction_summary <- surveys_final %>%
+  count(satisfied_or_dissatisfied)
+
+current_satisfied <- satisfaction_summary %>%
+  filter(satisfied_or_dissatisfied == "Satisfied") %>%
+  pull(n)
+
+current_dissatisfied <- satisfaction_summary %>%
+  filter(satisfied_or_dissatisfied == "Dissatisfied") %>%
+  pull(n)
+
+total_surveys <- current_satisfied + current_dissatisfied
+
+# Step 2: Define improvement factor (adjust as you like!)
+improvement_factor <- 0.7  # 70% of DSATs fixed
+
+###a scenario assuming a 70% success rate in resolving the identified dissatisfaction drivers was modeled based on a conservative estimate commonly used in customer experience improvement initiatives.
+
+# Step 3: Calculate potential uplift
+potentially_fixed <- round(current_dissatisfied * improvement_factor)
+
+# Step 4: Calculate forecasted satisfaction
+forecasted_satisfied <- current_satisfied + potentially_fixed
+forecasted_satisfaction_rate <- round(100 * forecasted_satisfied / total_surveys, 1)
+current_satisfaction_rate <- round(100 * current_satisfied / total_surveys, 1)
+
+# Step 5: Print results
+cat("Current satisfaction rate:", current_satisfaction_rate, "%\n")
+cat("Forecasted satisfaction rate after improvements:", forecasted_satisfaction_rate, "%")
+```
+
+## 9. Conclusion
+
+### Summary of Key Findings
+
+This analysis provided a comprehensive look into guest satisfaction across the hotel chain, identifying the main drivers of dissatisfaction and actionable solutions:
+
+- **Room cleanliness** was the top dissatisfaction driver, heavily concentrated in one specific property. Improving housekeeping standards at this location could deliver an immediate uplift in satisfaction.
+  
+- **Check-in/check-out process** complaints were primarily from business travelers and loyalty members. Implementing digital check-in solutions could streamline their experience.
+  
+- **Room and bedding comfort** issues were linked to two room types across multiple properties, suggesting a need to standardize mattress quality.
+  
+- **Staff friendliness** complaints disproportionately came from Platinum members, indicating the opportunity to introduce a dedicated high-tier service program.
+  
+- **Amenities and food quality** accounted for smaller portions of dissatisfaction but should not be overlooked as part of a broader experience upgrade strategy.
+
+### Satisfaction Forecast
+
+Assuming a **70% resolution success rate** across all dissatisfaction areas, the projected satisfaction rate could improve from approximately `r current_satisfaction_rate`% to `r forecasted_satisfaction_rate`%, representing a substantial boost in guest experience.
+
+### Next Steps
+
+
+Based on the insights uncovered in this analysis, the following targeted recommendations are proposed to improve guest satisfaction across the hotel chain:
+
+1. **Address Cleanliness Issues**  
+   - Revise and reinforce housekeeping protocols at Serenity Miami Hotel.  
+   - Provide staff training focused on cleaning standards at Serenity Miami Hotel.  
+   - Conduct regular room inspections to ensure compliance for all properties.
+
+2. **Improve Check-in/Check-out Experience, Especially for Business Guests**  
+   - Implement a digital check-in system and digital room key integration for loyalty members.  
+   - Introduce priority check-in lanes or dedicated counters for Gold, Silver, and Bronze members.  
+   - Provide better pre-arrival communication to set expectations.
+
+3. **Enhance Room and Bedding Comfort in Standard Queen and Two-Bedroom Suites**  
+   - Audit mattresses and bedding in these room types: the Standard Queen and the Two-Bedroom Suites. 
+   - Offer hypoallergenic or alternative bedding options.  
+   - Explore guest preference options (e.g., pillow or mattress toppers) upon booking.
+
+4. **Elevate Service for Platinum Loyalty Members**  
+   - Create a specialized service team or VIP concierge for Platinum members.  
+   - Provide staff training focused on the expectations and needs of top-tier guests.  
+   - Introduce personalized welcome amenities or pre-arrival.
+
+5. **Upgrade Amenities in Standard Queen Rooms**  
+   - Add kettles and hairdryers to these rooms, as their absence was a key complaint.  
+   - Standardize essential amenities across all properties to avoid gaps.
+
+6. **Improve Food Quality at Houston and New York Properties**  
+   - Focus improvement efforts on Houston and New York City properties, which account for over 60% of food complaints.  
+   - Conduct menu reviews and refresh culinary offerings.  
+   - Invest in staff training for kitchen and dining teams.  
+   - Gather ongoing feedback from guests to monitor improvements.
+
+By addressing these key areas, the hotel chain can make data-driven improvements that directly impact guest loyalty and business performance.
+
+Thank you. :)
