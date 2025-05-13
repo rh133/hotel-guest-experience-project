@@ -12,4 +12,6 @@ This project explores the guest experience using a simulated dataset that mirror
 - `guest_satisfaction_survey_responses.xlsx` → Raw dataset
 
 ## How to view
-- Open the HTML report in your browser to explore the results.
+- Download the HTML report in your browser to explore the results.
+- ![image](https://github.com/user-attachments/assets/5d6028f4-cd3e-4a4d-95bc-010eee0e76d7)
+
