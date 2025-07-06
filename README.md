@@ -12,6 +12,6 @@ This project explores the guest experience using a simulated dataset that mirror
 - `guest_satisfaction_survey_responses.xlsx` → Raw dataset
 
 ## How to view
-- Download the HTML report in your browser to explore the results.
+- Download the HTML report in your browser to explore the results, or click <here>(https://710ef0be862f41b5bfd09e70c6ed0ed2.app.posit.cloud/file_show?path=%2Fcloud%2Fproject%2Fhotel_guest_experience_analysis.html)
 - ![image](https://github.com/user-attachments/assets/5d6028f4-cd3e-4a4d-95bc-010eee0e76d7)
 
